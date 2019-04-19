@@ -1,0 +1,302 @@
+---
+title: "Descriptive Analysis of Network Graph Characteristics"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Vertex and Edge Characteristics
+###Vertex Degree
+The degree distribution for the karate club network is shown using a histogram.
+```{r message=F}
+library(sand) 
+data(karate)
+hist(degree(karate), col="lightblue", xlim=c(0, 50),xlab="Vertex Degree", ylab="Frequency", main="")
+```
+
+We can see that there are three distinct groups of vertices, as measured by degree. The two most highly connected vertices correspond to actors 1 and 34 in the network, representing the instructor and administrator about whom the club eventually split. The next set of vertices consists of actors 2, 3, and also 33. 
+
+For weighted networks, a useful generalization of degree is the notion of vertex strength, which is obtained simply by summing up the weights of edges incident to a given vertex. The distribution of strength—sometimes called the weighted degree distribution—is defined in analogy to the ordinary degree distribution. To illustrate, vertex strength for the karate club network is also shown.
+
+```{r}
+hist(graph.strength(karate), col="pink", xlab="Vertex Strength", ylab="Frequency", main="")
+```
+
+For this network, the range of vertex strength stretches well beyond that of vertex degree, and the previously observed distinction among the three groups of vertices is lost. Nevertheless, both histograms arguably communicate important information about the network.
+
+Degree distributions can exhibit a variety of shapes. For a network of interactions among protein pairs in yeast, for example,
+
+```{r message=F}
+library(igraphdata)
+data(yeast)
+ecount(yeast)
+vcount(yeast)
+d.yeast <- degree(yeast)
+hist(d.yeast,col="blue", xlab="Degree", ylab="Frequency", main="Degree Distribution")
+```
+
+In particular, while there is a substantial fraction of vertices of quite low degree, of an order of magnitude similar to those of the karate network, there are also a nontrivial number of vertices with degrees at successively higher orders of magnitude.
+
+Given the nature of the decay in this distribution, a log–log scale is more effective in summarizing the degree information.
+
+```{r}
+dd.yeast <- degree.distribution(yeast)
+d <- 1:max(d.yeast)-1
+ind <- (dd.yeast != 0)
+plot(d[ind], dd.yeast[ind], log="xy", col="blue", xlab=c("Log-Degree"), ylab=c("Log-Intensity"), main="Log-Log Degree Distribution")
+```
+
+
+Beyond the degree distribution itself, it can be interesting to understand the manner in which vertices of different degrees are linked with each other. Useful in assessing this characteristic is the notion of the average degree of the neighbors of a given vertex. For example, a plot of average neighbor degree versus vertex degree in the yeast data  suggests that while there is a tendency for vertices of higher degrees to link with similar vertices, vertices of lower degree tend to link with vertices of both lower and higher degrees.
+
+```{r}
+a.nn.deg.yeast <- graph.knn(yeast,V(yeast))$knn 
+plot(d.yeast, a.nn.deg.yeast, log="xy", col="goldenrod", xlab=c("Log Vertex Degree"), ylab=c("Log Average Neighbor Degree"))
+```
+
+###Vertex Centrality
+
+An intuitively appealing way of displaying vertex centralities (for networks of small to moderate size) is to use a radial layout, with more central vertices located closer to the center. The function `gplot.target`, in the package **sna**, can be used for this purpose. For example,
+
+
+```{r message=F,warning=FALSE}
+A <- get.adjacency(karate, sparse=FALSE) 
+library(network)
+g <- network::as.network.matrix(A) 
+library(sna)
+sna::gplot.target(g, degree(g), main="Degree", circ.lab = FALSE, circ.col="skyblue", usearrows = FALSE, vertex.col=c("blue", rep("red", 32), "yellow"), edge.col="darkgray")
+sna::gplot.target(g, closeness(g), main="closeness", circ.lab = FALSE, circ.col="skyblue", usearrows = FALSE, vertex.col=c("blue", rep("red", 32), "yellow"), edge.col="darkgray")
+sna::gplot.target(g, betweenness(g), main="Betweenness", circ.lab = FALSE, circ.col="skyblue", usearrows = FALSE, vertex.col=c("blue", rep("red", 32), "yellow"), edge.col="darkgray")
+sna::gplot.target(g, evcent(g), main="Eigenvector Centrality", circ.lab = FALSE, circ.col="skyblue", usearrows = FALSE, vertex.col=c("blue", rep("red", 32), "yellow"), edge.col="darkgray")
+```
+
+Applying these measures to the AIDS blog network indicates, that only six of the 146 blogs in this network play the role of a hub, while the vast majority of the vertices (including some of the hubs) play the role of an authority.
+```{r}
+l <- layout.kamada.kawai(aidsblog)
+plot(aidsblog, layout=l, main="Hubs", vertex.label="", vertex.size=10 * sqrt(hub.score(aidsblog)$vector)) 
+plot(aidsblog, layout=l, main="Authorities", vertex.label="", vertex.size=10 * sqrt(authority.score(aidsblog)$vector))
+```
+
+
+
+###Characterizing Edges
+
+Using edge betweenness with the karate network and examining, for instance, the edges with the three largest betweenness values
+```{r}
+eb <- edge.betweenness(karate)
+E(karate)[order(eb, decreasing=T)[1:3]]
+```
+
+we are led to note that actor 20 plays a key role from this perspective in facilitating the direct flow of information between the head instructor (Mr Hi, vertex 1) and the administrator (John A, vertex 34).
+
+
+##Characterizing Network Cohesion
+###Subgraphs and Censuses
+
+One approach to defining network cohesion is through specification of a certain subgraph(s) of interest. The canonical example of such a subgraph is that of a clique. Recall that cliques are complete subgraphs and hence are subsets of vertices that are fully cohesive, in the sense that all vertices within the subset are connected by edges.
+A census of cliques of all sizes can provide some sense of a ‘snapshot’ of how structured a graph is.
+
+```{r}
+table(sapply(cliques(karate), length))
+```
+
+For the karate network a census of this sort reflects that there are 34 nodes (cliques of size one) and 78 edges (cliques of size two), followed by 45 triangles (cliques of size three). We also see that the largest cliques are of size five, of which there are only two. These two both involve four actors in common, including actor 1, i.e., the head instructor.
+
+```{r}
+cliques(karate)[sapply(cliques(karate), length) == 5]
+```
+
+A maximal clique is a clique that is not a subset of a larger clique. In the karate network, the two largest cliques (formally called maximum cliques) are maximal, while, for example, the same can be said of only two of the 11 cliques of size four.
+
+```{r}
+table(sapply(maximal.cliques(karate), length))
+```
+
+
+In practice, large cliques are relatively rare, as they necessarily require that a graph G itself be fairly dense, while real-world networks are often sparse. For example, in the network of protein–protein interactions in yeast encountered earlier in this chapter, despite being roughly two orders of magnitude larger than the karate network, the size of the largest clique (formally, the clique number) is nevertheless comparatively small.
+
+```{r}
+clique.number(yeast)
+```
+
+
+Various weakened notions of cliques exist. For example, a k-core of a graph G is a subgraph of G for which all vertex degrees are at least k, and such that no other subgraph obeying the same condition contains it (i.e., it is maximal in this property). The notion of cores is particularly popular in visualization, as it provides a way of decomposing a network into ‘layers’, in the sense of an onion. Such decompositions can be combined in a particularly effective manner with a radial layout (e.g., using a target plot).
+
+```{r warning=F}
+cores <- graph.coreness(karate) 
+sna::gplot.target(g, cores, circ.lab = FALSE, circ.col="skyblue", usearrows = FALSE, vertex.col=cores, edge.col="darkgray") 
+detach("package:sna")
+detach("package:network")
+```
+
+A census of the possible states of these two classes of subgraphs, i.e., counting how many times each state is observed in a graph G, can yield insight into the nature of the connectivity in the graph. For example, in the AIDS blog network, we see that the vast majority of the dyads are null and, of those that are non-null, almost all are asymmetric, indicating a decided one-sidedness to the manner in which blogs in this network reference each other.
+
+```{r}
+aidsblog <- simplify(aidsblog)
+dyad.census(aidsblog)
+```
+
+###Density and Related Notions of Relative Frequency
+
+The density of a graph is the frequency of realized edges relative to potential edges. we see that the subgraphs corresponding to each of the instructor and the administrator, in union with their immediate respective neighborhoods—i.e., the ego-centric networks around vertices 1 and 34—are noticeably more dense than the overall network.
+
+```{r}
+ego.instr <- induced.subgraph(karate, neighborhood(karate, 1, 1)[[1]])
+ego.admin <- induced.subgraph(karate, neighborhood(karate, 1, 34)[[1]])
+graph.density(karate)
+graph.density(ego.instr)
+graph.density(ego.admin)
+```
+
+```{r}
+transitivity(karate)
+transitivity(karate, "local", vids=c(1,34))
+reciprocity(aidsblog, mode="default")
+reciprocity(aidsblog, mode="ratio")
+```
+
+###Connectivity, Cuts, and Flows
+
+Recall, for example, our network of protein interactions in yeast. The network graph of 2617 vertices is not connected.
+
+```{r}
+is.connected(yeast)
+comps <- decompose.graph(yeast)
+table(sapply(comps, vcount))
+```
+
+This single component contains 2375/2617 ≈ 90 % of the vertices in the network. In contrast, none of the other components alone contain even 1 %. In practice, often attention would be restricted to this giant component alone in carrying out further analysis and modeling.
+
+```{r}
+yeast.gc <- decompose.graph(yeast)[[1]]
+average.path.length(yeast.gc)
+diameter(yeast.gc)
+transitivity(yeast.gc)
+vertex.connectivity(yeast.gc)
+edge.connectivity(yeast.gc)
+yeast.cut.vertices <- articulation.points(yeast.gc)
+length(yeast.cut.vertices)
+```
+
+
+For example, a celebrated characteristic observed in the giant component of many real-world networks is the so-called small world property, which refers to the situation wherein (a) the shortest-path distance between pairs of vertices is generally quite small, but (b) the clustering is relatively high. In our network of protein– protein interactions in yeast, we see that the average path length in the giant component is barely greater than five and even the longest of paths is not much bigger. At the same time, the clustering in this network is relatively large indicating that close to 50 % of connected triples close to form triangles.
+
+A somewhat more refined notion of connectivity than components derives from asking whether, if an arbitrary subset of k vertices (edges) is removed from a graph, the remaining subgraph is connected. The concepts of vertex- and edge-connectivity, and the related concepts of vertex- and edge-cuts, help to make such notions precise. In the case of the giant component of the yeast network, the vertex and edge connectivity are both equal to one.
+
+
+If the removal of a particular set of vertices (edges) in a graph disconnects the graph, that set is called a vertex-cut (edge-cut). A single vertex that disconnects the graph is called a cut vertex, or sometimes an articulation point. Identification of such vertices can provide a sense of where a network is vulnerable (e.g., in the sense of an attack, where disconnecting produces undesired consequences, such as a power outage in an energy network). In the giant component of the yeast network, almost 15 % of the vertices are cut vertices.
+
+Note that the distinction between strong and weak connectivity can be severe for some digraphs. For example, the AIDS blog network is weakly connected but not strongly connected.
+
+And while there does exist a strongly connected component within the graph, there is only one and it has only four vertices.
+
+
+```{r}
+is.connected(aidsblog, mode=c("weak"))
+is.connected(aidsblog, mode=c("strong"))
+aidsblog.scc <- clusters(aidsblog, mode=c("strong"))
+table(aidsblog.scc$csize)
+```
+
+##Graph Partitioning
+###Hierarchical Clustering
+
+Applying community detection method to the Karate network, we find that the method has declared there to be three communities. Based on what we know of this network, and examining the community membership, it would be reasonable to conjecture that the largest community of 18 members is centered around the administrator (i.e., John A, vertex ID 34), while the second largest community of 11 members is centered around the head instructor (i.e., Mr Hi, vertex ID 1). The visual representation obtained by plotting the network with these community designations indicated, provides further support for this conjecture.
+
+```{r}
+kc <- fastgreedy.community(karate)
+length(kc)
+sizes(kc)
+membership(kc)
+plot(kc, karate)
+```
+
+An example of a dendrogram is shownbelow, for our hierarchical partitioning of the karate network, using the igraph function dendPlot. The package **ape** is called to facilitate the mode ‘phylo’ in `dendPlot`, which uses tools from the former, designed for display of phylogenetic trees, in rendering the dendrogram.
+
+```{r message=F}
+library(ape)
+dendPlot(kc, mode="phylo")
+```
+
+###Spectral Partitioning
+
+We illustrate using the karate network again. It is straightforward to do the nec- essary eigen-analysis.
+
+```{r}
+k.lap <- graph.laplacian(karate)
+eig.anal <- eigen(k.lap)
+```
+
+We plot the eigenvalues of the graph Laplacian
+
+```{r}
+plot(eig.anal$values, col="blue", ylab="Eigenvalues of Graph Laplacian")
+```
+
+Extracting the Fiedler vector
+```{r}
+f.vec <- eig.anal$vectors[, 33]
+```
+
+and plotting the entries of that vector versus actor number,
+
+```{r}
+faction <- get.vertex.attribute(karate, "Faction") 
+f.colors <- as.character(length(faction)) 
+f.colors[faction == 1] <- "red"
+f.colors[faction == 2] <- "cyan"
+plot(f.vec, pch=16, xlab="Actor Number", ylab="Fiedler Vector Entry", col=f.colors)
+abline(0, 0, lwd=2, col="lightgray")
+```
+we find that this spectral method exactly captures the partitioning of the network indicated by the faction labels.
+
+###Validation of Graph Partitioning
+These particular yeast data include the assignment of proteins to one of 13 func- tional classes (including “unknown”, denote by ‘U’).
+
+
+```{r}
+func.class <- get.vertex.attribute(yeast.gc, "Class") 
+table(func.class)
+```
+
+These classes are a way of categorizing the roles of proteins in helping the cell accomplish various tasks through higher-level cellular processes.
+
+The affinity of proteins to physically bind to each other is known to be directly related to their participation in common cellular functions. Hence, the external assignment of proteins to functional classes should correlate, to at least some extent, with their assignment to ‘communities’ by a reasonable graph partitioning algorithm. Using the same hierarchical clustering algorithm as in the previous section, now applied to the (giant component of the) yeast network,
+
+```{r}
+yc <- fastgreedy.community(yeast.gc) 
+c.m <- membership(yc)
+```
+
+a simple two-dimensional table allows us to group proteins according to their membership under each categorization.
+```{r}
+table(c.m, func.class, useNA=c("no"))
+```
+Some of the membership assignments resulting from our algorithm overlap quite strongly with individual functional classes. For example, 110 of the 182 proteins in the first community have the functional class “P” (indicating a role in protein synthesis), which suggests that the first community is largely capturing that class. On the other hand, the 733 proteins in the fourth community are spread through all functional classes (including 121 with unknown function), making this community decidedly less interpretable against this validation set.
+
+
+
+##Assortativity and Mixing
+Selective linking among vertices, according to a certain characteristic(s), is termed assortative mixing in the social network literature. Measures that quantify the extent of assortative mixing in a given network have been referred to as assortativity coefficients, and are essentially variations on the concept of correlation coefficients.
+
+For instance, for the class ‘P’, representing proteins that are known to play a role in protein synthesis, we see an assortativity coefficient of nearly 0.5.
+
+```{r}
+assortativity.nominal(yeast, (V(yeast)$Class=="P")+1, directed=FALSE)
+```
+
+For the yeast network, we find that the degree correlation is positive and relatively large.
+
+```{r}
+assortativity.degree(yeast)
+```
+
+
+
+
+
+
+
+
